@@ -1,9 +1,9 @@
 [package]
 edition = "2021"
 name = "anewer"
-version = "0.1.7"
+version = "0.2.0"
 authors = ["ysf <ich@youssef.de>"]
-description = "anewer appends lines from stdin to a file if they don't already exist in the file. You could also use it as `uniq` without `sort`."
+description = "anewer appends only new lines from stdin to a file."
 homepage = "https://github.com/ysf/anewer"
 repository = "https://github.com/ysf/anewer"
 categories = ["command-line-utilities"]
@@ -19,8 +19,8 @@ exclude = [
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.4", features = ["derive"] }
-memchr = "2.6"
 ahash = "0.8"
+memchr = "2.8"
 
 [[bin]]
 name = "anewer"
