@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "anewer"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["ysf <ich@youssef.de>"]
 description = "anewer appends only new lines from stdin to a file."
 homepage = "https://github.com/ysf/anewer"
@@ -12,6 +12,9 @@ readme = "README.md"
 license-file = "LICENSE"
 exclude = [
     "assets/*",
+    ".gitignore",
+    "RECIPES.md",
+    "docs/*",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
