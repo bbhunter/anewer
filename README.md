@@ -1,4 +1,4 @@
-# anewer [![crates.io][crates-img]][crates]]
+# anewer [![crates.io][crates-img]][crates]
 anewer appends only new lines from stdin to a file.
 
 This is a Rust reimplementation of [tomnomnom/anew](https://github.com/tomnomnom/anew).
