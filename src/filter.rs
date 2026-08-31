@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use crate::hasher;
 
+const BUFSIZE: usize = 64 * 1024;
+
 fn trim_line(line: &[u8], trim: bool) -> &[u8] {
     if !trim {
         return line;
@@ -119,12 +121,14 @@ fn scan_lines(
                 return Ok(ScanOutcome::Finished { end_delim });
             }
 
-            if let Some(delimiter_index) = memchr(delim, chunk) {
+            let mut start = 0;
+            while let Some(relative) = memchr(delim, &chunk[start..]) {
+                let end = start + relative + 1;
                 end_delim = true;
                 let keep_going = if partial.is_empty() {
-                    process(&chunk[..=delimiter_index])?
+                    process(&chunk[start..end])?
                 } else {
-                    partial.extend_from_slice(&chunk[..=delimiter_index]);
+                    partial.extend_from_slice(&chunk[start..end]);
                     let keep_going = process(partial)?;
                     partial.clear();
                     keep_going
@@ -132,12 +136,14 @@ fn scan_lines(
                 if !keep_going {
                     return Ok(ScanOutcome::Stopped);
                 }
-                consumed = delimiter_index + 1;
-            } else {
-                partial.extend_from_slice(chunk);
-                end_delim = false;
-                consumed = chunk.len();
+                start = end;
             }
+
+            if start < chunk.len() {
+                partial.extend_from_slice(&chunk[start..]);
+                end_delim = false;
+            }
+            consumed = chunk.len();
         }
         reader.consume(consumed);
     }
@@ -161,6 +167,7 @@ fn write_line(
 #[derive(Default)]
 pub struct LineOptions {
     pub null: bool,
+    pub line_buffered: bool,
     pub trim: bool,
     pub skip_fields: usize,
     pub field_delimiter: Option<u8>,
@@ -171,6 +178,7 @@ pub struct HashFilter {
     set: HashSet<u64, BuildHasherDefault<hasher::IdentityHasher>>,
     out_file: Option<BufWriter<File>>,
     quiet: bool,
+    line_buffered: bool,
     invert: bool,
     delim: u8,
     trim: bool,
@@ -197,6 +205,7 @@ impl HashFilter {
             set: HashSet::default(),
             out_file: None,
             quiet,
+            line_buffered: options.line_buffered,
             invert,
             delim,
             trim: options.trim,
@@ -233,9 +242,8 @@ impl HashFilter {
         let mut partial = Vec::new();
         let delim = self.delim;
         let trim = self.trim;
-
         let out = {
-            let mut reader = BufReader::new(&mut f);
+            let mut reader = BufReader::with_capacity(BUFSIZE, &mut f);
 
             scan_lines(&mut reader, delim, &mut partial, |raw| {
                 let line = trim_line(&raw[..raw.len() - 1], trim);
@@ -250,7 +258,7 @@ impl HashFilter {
                 f.write_all(&[delim])?;
             }
 
-            self.out_file = Some(BufWriter::new(f));
+            self.out_file = Some(BufWriter::with_capacity(BUFSIZE, f));
         }
         Ok(())
     }
@@ -270,9 +278,10 @@ impl HashFilter {
             }
         }
 
-        if ((!self.invert && is_new_line) || (self.invert && !is_new_line))
-            && !self.quiet
-            && write_line(stdout, raw, line, self.delim, self.trim).is_err()
+        let should_print = self.invert != is_new_line && !self.quiet;
+        if should_print
+            && (write_line(stdout, raw, line, self.delim, self.trim).is_err()
+                || (self.line_buffered && stdout.flush().is_err()))
         {
             return Ok(false);
         }
@@ -283,12 +292,14 @@ impl HashFilter {
     pub fn process_input(&mut self) -> Result<()> {
         let stdin = io::stdin();
         let mut stdin = stdin.lock();
-        let mut stdout = io::stdout().lock();
+        let mut stdout = BufWriter::with_capacity(BUFSIZE, io::stdout().lock());
         let mut partial = Vec::new();
 
         scan_lines(&mut stdin, self.delim, &mut partial, |raw| {
             self.process_line(raw, &mut stdout)
         })?;
+
+        let _ = stdout.flush();
 
         if let Some(f) = &mut self.out_file {
             f.flush().context("error flushing file")?;

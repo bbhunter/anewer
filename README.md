@@ -22,12 +22,13 @@ Arguments:
   [FILENAME]  path to file, will be created if needed
 
 Options:
-  -0, --null                    use NUL instead of newline as the record separator
+  -0, --null                    use NUL instead of newline as the line separator
   -q, --quiet                   quiet mode
+      --line-buffered           flush stdout after every output line
   -d, --dry-run                 dry run, will leave the file as it is
   -t, --trim                    remove leading and trailing whitespace from line
-      --skip-fields <NUM>       ignore leading stdin fields when building the comparision string
-  -F, --field-separator <BYTE>  separate fields with BYTE instead of whitespace
+      --skip-fields <NUM>       ignore leading stdin fields when building the comparison string
+  -F, --field-delimiter <BYTE>  separate fields with BYTE instead of whitespace
   -v, --invert                  invert matching
   -h, --help                    show this help
   -V, --version                 print anewer version
@@ -88,7 +89,7 @@ Three
 Four
 ```
 
-#### Trim records before deduplication
+#### Trim lines before deduplication
 
 ```
 $ printf '  One  \nOne\n' | anewer --trim
@@ -99,7 +100,7 @@ One
 
 Some tools print timestamps you might want to ignore. `--skip-fields` applies only to stdin but allowes `anewer` to compare the extracted stringt with the lines already stored in the given file. If new, the line is appended to the file, while it passes through the original line to stdout.
 
-With `-F`, each delimiter byte separates a field, including empty fields. If a record line has fewer than `NUM` fields, its considered empty. `--skip-fields 0` keeps the line as it is. Without `-F` whitespace is used as delimiter, and leading whitespace is ignored.
+With `-F`, each delimiter byte separates a field, including empty fields. If a line has fewer than `NUM` fields, it is considered empty. `--skip-fields 0` keeps the line as it is. Without `-F` whitespace is used as delimiter, and leading whitespace is ignored.
 
 ```
 $ cat log.txt
@@ -121,7 +122,9 @@ $ anewer --skip-fields 2 -F $'\t' event.log
 
 With `-v`/ `--invert`, matching lines are printed to stdin while new lines are still added to the output file.
 
-Besides that, `--trim` is applied before extraction, and `--null` changes the record separator for stdin, stdout, and the output file.
+Besides that, `--trim` is applied before extraction, and `--null` changes the line separator for stdin, stdout, and the output file.
+
+stdout is buffered by default. Use `--line-buffered` to flush each line immediately.
 
 # License
 GPLv3+

@@ -11,6 +11,7 @@ fn main() -> anyhow::Result<()> {
         args.dry_run,
         LineOptions {
             null: args.null,
+            line_buffered: args.line_buffered,
             trim: args.trim,
             skip_fields: args.skip_fields.unwrap_or(0),
             field_delimiter: args.field_delimiter,

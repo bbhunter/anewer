@@ -1,10 +1,13 @@
 use std::fs;
-use std::io::{ErrorKind, Write};
+use std::io::{ErrorKind, Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
 
@@ -245,4 +248,63 @@ fn dry_run_prints_without_modifying_existing_file() {
     assert_success(&result);
     assert_eq!(result.stdout, b"new\n");
     assert_eq!(state.read(), b"known\n");
+}
+
+#[test]
+fn line_buffered_flushes_before_input_ends() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_anewer"))
+        .arg("--line-buffered")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = child.stdout.take().unwrap();
+    let (sender, receiver) = mpsc::channel();
+    let reader = thread::spawn(move || {
+        let mut line = [0; 4];
+        let result = stdout.read_exact(&mut line).map(|()| line);
+        let _ = sender.send(result);
+    });
+
+    stdin.write_all(b"new\n").unwrap();
+    stdin.flush().unwrap();
+    let line = match receiver.recv_timeout(Duration::from_secs(5)) {
+        Ok(result) => result.unwrap(),
+        Err(error) => {
+            drop(stdin);
+            let _ = child.kill();
+            let _ = child.wait();
+            reader.join().unwrap();
+            panic!("stdout was not flushed: {error}");
+        }
+    };
+
+    drop(stdin);
+    assert!(child.wait().unwrap().success());
+    reader.join().unwrap();
+    assert_eq!(line, *b"new\n");
+}
+
+#[test]
+fn line_buffered_stops_at_a_closed_stdout() {
+    let state = StateFile::missing();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_anewer"))
+        .args(["--line-buffered", state.arg()])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take());
+
+    let mut input = Vec::new();
+    for index in 0..10_000 {
+        writeln!(input, "line-{index}").unwrap();
+    }
+    let _ = child.stdin.take().unwrap().write_all(&input);
+
+    assert!(child.wait().unwrap().success());
+    assert_eq!(state.read(), b"line-0\n");
 }

@@ -22,6 +22,10 @@ pub struct Args {
     #[arg(short, long)]
     pub quiet: bool,
 
+    /// flush stdout after every line.
+    #[arg(long)]
+    pub line_buffered: bool,
+
     /// dry run, will leave the file as is.
     #[arg(short = 'd', long)]
     pub dry_run: bool,
